@@ -19,8 +19,8 @@ from diffusers import DDPMPipeline
 @dataclass
 class TrainingConfig:
     image_size = 512  # the generated image resolution
-    train_batch_size = 16
-    eval_batch_size = 32  # how many images to sample during evaluation
+    train_batch_size = 8
+    eval_batch_size = 16  # how many images to sample during evaluation
     num_epochs = 200
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
