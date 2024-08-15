@@ -1,5 +1,6 @@
 import torch
 import os
+import torch.nn.functional as F
 
 from dataclasses import dataclass
 from datasets import load_dataset
