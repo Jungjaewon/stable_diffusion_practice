@@ -141,7 +141,7 @@ if __name__ == '__main__':
     config = TrainingConfig()
     config.dataset_name = "huggan/smithsonian_butterflies_subset"
     dataset = load_dataset(config.dataset_name, split="train")
-
+    dataset.set_transform(transform)
     preprocess = transforms.Compose(
         [
             transforms.Resize((config.image_size, config.image_size)),
