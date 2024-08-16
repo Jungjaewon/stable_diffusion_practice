@@ -60,6 +60,7 @@ class Classification_2d(Dataset):
 def get_loader(config):
 
     transform_train = transforms.Compose([
+        transforms.Resize((config['image_size'], config['image_size'])),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
