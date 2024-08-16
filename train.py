@@ -67,9 +67,7 @@ def get_loader(config):
 
     trainset = Classification_2d(config['dataset_name'], transform_train, 'train')
 
-    train_sampler = RandomSampler(trainset)
     train_loader = DataLoader(trainset,
-                              sampler=train_sampler,
                               batch_size=config['eval_batch_size'],
                               num_workers=4,
                               pin_memory=True)
