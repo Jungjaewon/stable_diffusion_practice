@@ -231,7 +231,7 @@ if __name__ == '__main__':
 
     noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config['learning_rate'])
+    optimizer = torch.optim.AdamW(model.parameters(), lr=float(config['learning_rate']))
     lr_scheduler = get_cosine_schedule_with_warmup(
         optimizer=optimizer,
         num_warmup_steps=config['lr_warmup_steps'],
