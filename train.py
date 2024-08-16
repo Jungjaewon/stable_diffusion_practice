@@ -200,10 +200,10 @@ if __name__ == '__main__':
                 transforms.Normalize([0.5], [0.5]),
             ]
         )
+        train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config['train_batch_size'], shuffle=True)
     else:
-        dataset = get_loader(config)
+        train_dataloader = get_loader(config)
 
-    train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config['train_batch_size'], shuffle=True)
 
     model = UNet2DModel(
         sample_size=config['image_size'],  # the target image resolution
