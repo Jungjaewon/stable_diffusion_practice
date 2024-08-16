@@ -1,5 +1,5 @@
 image_size : 512  # the generated image resolution
-train_batch_size : 6
+train_batch_size : 4
 eval_batch_size : 16  # how many images to sample during evaluation
 num_epochs : 200
 gradient_accumulation_steps: 1
