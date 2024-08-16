@@ -55,7 +55,7 @@ class Classification_2d(Dataset):
         return {"images": self.transform(target_image)}
 
     def __len__(self):
-        return len(self.outfit_data)
+        return len(self.data_list)
 
 def get_loader(config):
 
