@@ -32,16 +32,10 @@ class Classification_2d(Dataset):
         if dataset_name == 'fashion':
             self.outfit_list = glob(osp.join(self.image_dir, '*'))
             self.data_list = list()
-            random.shuffle(self.outfit_list)
-
-            with open('outfitdata_set3_tagged.plk', 'rb') as fp:
-                self.tagged_dict = pickle.load(fp)[mode]
 
             for outfit_id_path in self.outfit_list:
-                outfit_id = outfit_id_path.split(os.sep)[-1]
                 for i in range(1, 6):
                     data_path = osp.join(outfit_id_path, f'{i}.jpg')
-                    cat_idx = self.tagged_dict[f'{outfit_id}_{str(i)}']['cate_idx']
                     self.data_list.append(data_path)
         elif dataset_name == "character_a":
             self.data_list = glob('./character_edge2color/train_A/*.png')
@@ -69,8 +63,8 @@ def get_loader(config):
     trainset = Classification_2d(config['dataset_name'], transform_train, 'train')
 
     train_loader = DataLoader(trainset,
-                              batch_size=config['eval_batch_size'],
-                              num_workers=4,
+                              batch_size=config['train_batch_size'],
+                              num_workers=2,
                               pin_memory=True)
 
     return train_loader
