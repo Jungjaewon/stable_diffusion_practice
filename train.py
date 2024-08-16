@@ -1,10 +1,13 @@
 import torch
 import os
 import torch.nn.functional as F
+import yaml
+import argparse, pickle, random
+import os.path as osp
 
 from dataclasses import dataclass
 from datasets import load_dataset
-from torchvision import transforms
+from torchvision import transforms, datasets
 from diffusers import UNet2DModel
 from PIL import Image
 from diffusers import DDPMScheduler
@@ -14,26 +17,64 @@ from accelerate import Accelerator
 from huggingface_hub import create_repo, upload_folder
 from tqdm.auto import tqdm
 from pathlib import Path
+from glob import glob
 from diffusers import DDPMPipeline
+from torch.utils.data import DataLoader, RandomSampler, DistributedSampler, SequentialSampler, Dataset
 
-@dataclass
-class TrainingConfig:
-    image_size = 512  # the generated image resolution
-    train_batch_size = 8
-    eval_batch_size = 16  # how many images to sample during evaluation
-    num_epochs = 200
-    gradient_accumulation_steps = 1
-    learning_rate = 1e-4
-    lr_warmup_steps = 500
-    save_image_epochs = 10
-    save_model_epochs = 30
-    mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir = "ddpm-butterflies-512"  # the model name locally and on the HF Hub
-    push_to_hub = False  # whether to upload the saved model to the HF Hub
-    hub_model_id = "<your-username>/<my-awesome-model>"  # the name of the repository to create on the HF Hub
-    hub_private_repo = False
-    overwrite_output_dir = True  # overwrite the old model when re-running the notebook
-    seed = 0
+
+class Classification_2d(Dataset):
+
+    def __init__(self, dataset_name, transform, mode):
+        self.image_dir = osp.join('outfitdata_set3_4598', mode)
+        self.transform = transform
+        self.mode = mode
+
+        if dataset_name == 'fashion':
+            self.outfit_list = glob(osp.join(self.image_dir, '*'))
+            self.data_list = list()
+            random.shuffle(self.outfit_list)
+
+            with open('outfitdata_set3_tagged.plk', 'rb') as fp:
+                self.tagged_dict = pickle.load(fp)[mode]
+
+            for outfit_id_path in self.outfit_list:
+                outfit_id = outfit_id_path.split(os.sep)[-1]
+                for i in range(1, 6):
+                    data_path = osp.join(outfit_id_path, f'{i}.jpg')
+                    cat_idx = self.tagged_dict[f'{outfit_id}_{str(i)}']['cate_idx']
+                    self.data_list.append(data_path)
+        elif dataset_name == "character_a":
+            self.data_list = glob('./character_edge2color/train_A/*.png')
+        elif dataset_name == "character_b":
+            self.data_list = glob('./character_edge2color/train_B/*.png')
+
+    def __getitem__(self, index):
+        img_path = self.data_list[index]
+        target_image = Image.open(osp.join(img_path))
+        target_image = target_image.convert('RGB')
+        return {"images": self.transform(target_image)}
+
+    def __len__(self):
+        return len(self.outfit_data)
+
+def get_loader(config):
+
+    transform_train = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+    ])
+
+    trainset = Classification_2d(config['dataset_name'], transform_train, 'train')
+
+    train_sampler = RandomSampler(trainset)
+    train_loader = DataLoader(trainset,
+                              sampler=train_sampler,
+                              batch_size=config['eval_batch_size'],
+                              num_workers=4,
+                              pin_memory=True)
+
+    return train_loader
 
 def transform(examples):
     images = [preprocess(image.convert("RGB")) for image in examples["image"]]
@@ -139,18 +180,28 @@ def train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_s
                     pipeline.save_pretrained(config.output_dir)
 
 if __name__ == '__main__':
-    config = TrainingConfig()
-    config.dataset_name = "huggan/smithsonian_butterflies_subset"
-    dataset = load_dataset(config.dataset_name, split="train")
-    dataset.set_transform(transform)
-    preprocess = transforms.Compose(
-        [
-            transforms.Resize((config.image_size, config.image_size)),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize([0.5], [0.5]),
-        ]
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', type=str, default='config.yml', help='specifies config yaml file')
+
+    params = parser.parse_args()
+
+    assert os.path.exists(params.config)
+    config = yaml.load(open(params.config, 'r'), Loader=yaml.FullLoader)
+    dataset_name = config['dataset_name']
+
+    if dataset_name == "huggan/smithsonian_butterflies_subset":
+        dataset = load_dataset(config['dataset_name'], split="train")
+        dataset.set_transform(transform)
+        preprocess = transforms.Compose(
+            [
+                transforms.Resize((config['image_size'], config['image_size'])),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5], [0.5]),
+            ]
+        )
+    else:
+        dataset = get_loader(config)
 
     train_dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.train_batch_size, shuffle=True)
 
@@ -180,11 +231,11 @@ if __name__ == '__main__':
 
     noise_scheduler = DDPMScheduler(num_train_timesteps=1000)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config['learning_rate'])
     lr_scheduler = get_cosine_schedule_with_warmup(
         optimizer=optimizer,
-        num_warmup_steps=config.lr_warmup_steps,
-        num_training_steps=(len(train_dataloader) * config.num_epochs),
+        num_warmup_steps=config['lr_warmup_steps'],
+        num_training_steps=(len(train_dataloader) * config['num_epochs']),
     )
 
     train_loop(config, model, noise_scheduler, optimizer, train_dataloader, lr_scheduler)
